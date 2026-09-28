@@ -1,6 +1,9 @@
 #ifndef SYSTEM_MONITOR_H
 #define SYSTEM_MONITOR_H
 
+#include "device.h" 
+#include "app.h"
+
 typedef struct{
     unsigned long long total;
     unsigned long long idle;
@@ -11,6 +14,8 @@ int get_memory_info(long *total_kb, long *available_kb);
 int get_cpu_stat(CpuStat *stat);
 int get_cpu_temperature(double *temperature);
 double calculate_cpu_usage(CpuStat *prev, CpuStat *curr);
+
+void *status_thread(void *arg);
 
 
 #endif

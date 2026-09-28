@@ -38,112 +38,6 @@ void handle_signal(int sig){               //收到SIGINT或SIGTERM，g_running 
     g_running = 0;
 }
 
-int handle_command(const char *buffer, CommandQueue *queue, Device *device, int client_fd);
-
-int process_client_data(ClientBuffer *client_buf, const char *data, size_t data_len, CommandQueue *queue, Device *device, int client_fd)
-{
-    if(client_buf->length + data_len >= sizeof(client_buf->buffer) ){
-        printf("buffer overflow,closing connection.\n");
-        return -1;
-    }
-    memcpy(client_buf->buffer + client_buf->length, data, data_len);       //将新数据拷贝到缓冲区末尾
-    client_buf->length += data_len;                      //更新缓冲区长度
-
-    size_t start = 0;
-    
-    for(size_t i = 0; i < client_buf->length; i++){
-        if(client_buf->buffer[i] == '\n'){
-            client_buf->buffer[i] = '\0';
-
-            char *commend = client_buf->buffer + start;   //获取命令字符串的起始位置
-            handle_command(commend, queue, device, client_fd);
-            start = i + 1;                           //更新start位置，指向下一个命令的起始位置
-        }
-    }
-    if(start > 0){                               //保存剩余数据
-            size_t remaining = client_buf->length - start;        //计算剩余数据长度
-            memmove(client_buf->buffer, client_buf->buffer + start, remaining);
-            client_buf->length = remaining;
-    }
-    
-    return 0;
-}
-
-void *status_thread(void *arg)
-{
-    Device *device = (Device *)arg;
-
-    CpuStat prev_cpu;
-    int has_prev_cpu = 0;
-
-    while(g_running){
-
-        Device_status status;
-        int speed;
-
-        pthread_mutex_lock(&device->mutex);
-
-        status = device->status;
-        speed = device->speed;
-
-        pthread_mutex_unlock(&device->mutex);
-
-        const char *status_str;
-        double uptime;
-
-        if(status  == DEVICE_RUNNING){
-            
-            status_str = "running";
-
-        }
-        else if(status == DEVICE_IDLE){
-            status_str = "idle";
-        }
-        else{
-            status_str = "error";
-        }
-
-        if(get_system_uptime(&uptime) == 0){
-            printf("[STATUS] status=%s speed=%d uptime=%.1f s\n", status_str, speed, uptime);
-            
-        }
-
-        long total_kb;
-        long available_kb;
-
-        if(get_memory_info(&total_kb, &available_kb) == 0){
-            long used_kb = total_kb - available_kb;
-
-            double memory_percent = (double)used_kb / total_kb * 100.0;
-
-            printf("[SYSEM] memory=%.1f%%\n", memory_percent);
-        }
-
-        CpuStat curr_cpu;
-
-        if(get_cpu_stat(&curr_cpu) == 0){
-            if(has_prev_cpu){
-                double cpu_usage = calculate_cpu_usage(&prev_cpu, &curr_cpu);
-                printf("[SYSEM] cpu=%.1f%%\n", cpu_usage);
-            }
-
-            prev_cpu = curr_cpu;
-            has_prev_cpu = 1;
-        }
-
-        double temperature;
-
-        if(get_cpu_temperature(&temperature) == 0){
-            printf("[SYSTEM] temperature=%.1f C\n", temperature);
-        }
-
-        sleep(5);          //状态线程停5秒
-    }
-
-    return NULL;
-
-}
-
 int handle_command(const char *buffer, CommandQueue *queue, Device *device, int client_fd)
 {
     ssize_t sent;
@@ -242,6 +136,34 @@ int handle_command(const char *buffer, CommandQueue *queue, Device *device, int 
     return 0;
 }
 
+int process_client_data(ClientBuffer *client_buf, const char *data, size_t data_len, CommandQueue *queue, Device *device, int client_fd)
+{
+    if(client_buf->length + data_len >= sizeof(client_buf->buffer) ){
+        printf("buffer overflow,closing connection.\n");
+        return -1;
+    }
+    memcpy(client_buf->buffer + client_buf->length, data, data_len);       //将新数据拷贝到缓冲区末尾
+    client_buf->length += data_len;                      //更新缓冲区长度
+
+    size_t start = 0;
+    
+    for(size_t i = 0; i < client_buf->length; i++){
+        if(client_buf->buffer[i] == '\n'){
+            client_buf->buffer[i] = '\0';
+
+            char *commend = client_buf->buffer + start;   //获取命令字符串的起始位置
+            handle_command(commend, queue, device, client_fd);
+            start = i + 1;                           //更新start位置，指向下一个命令的起始位置
+        }
+    }
+    if(start > 0){                               //保存剩余数据
+            size_t remaining = client_buf->length - start;        //计算剩余数据长度
+            memmove(client_buf->buffer, client_buf->buffer + start, remaining);
+            client_buf->length = remaining;
+    }
+    
+    return 0;
+}
 
 int set_nonblocking(int fd)
 {
