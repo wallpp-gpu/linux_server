@@ -33,8 +33,8 @@ void device_destroy(Device *device)
 
     pthread_mutex_destroy(&device->mutex);
 }
-
-static int virtual_device_start(Device *device)
+ 
+static int virtual_device_start(Device *device)        //修改device状态
 {
     pthread_mutex_lock(&device->mutex);
 

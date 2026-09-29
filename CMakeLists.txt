@@ -18,12 +18,12 @@ add_executable(
 target_include_directories(
     a7a_control_center
     PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include  #本地根目录
 )
 
-find_package(Threads REQUIRED)           #线程库
+find_package(Threads REQUIRED)           #线程库，CMake 探测当前平台如何支持线程
 
-target_link_libraries(a7a_control_center PRIVATE Threads::Threads)
+target_link_libraries(a7a_control_center PRIVATE Threads::Threads) #把线程支持正确链接到你的程序
 
-target_compile_options(a7a_control_center PRIVATE -Wall -Wextra)
+target_compile_options(a7a_control_center PRIVATE -Wall -Wextra) #wall为常用警告，wextra为更严格警告
 

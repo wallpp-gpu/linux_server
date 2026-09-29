@@ -136,7 +136,7 @@ double calculate_cpu_usage(CpuStat *prev, CpuStat *curr)
     return (double)(total_diff - idle_diff) / total_diff * 100.0;
 }
 
-void *status_thread(void *arg)
+void *status_thread(void *arg)          //读取status
 {
     Device *device = (Device *)arg;
 
