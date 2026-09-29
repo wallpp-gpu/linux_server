@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/zhuang/projects/a7a-control-center/build/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

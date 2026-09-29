@@ -1,0 +1,3 @@
+/home/zhuang/projects/a7a-control-center/build/CMakeFiles/a7a_control_center.dir
+/home/zhuang/projects/a7a-control-center/build/CMakeFiles/edit_cache.dir
+/home/zhuang/projects/a7a-control-center/build/CMakeFiles/rebuild_cache.dir
