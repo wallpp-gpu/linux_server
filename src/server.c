@@ -20,17 +20,12 @@
 #include "uart.h"
 #include "command.h"
 #include "logger.h"
+#include "network.h"
 
 #define PORT 8888
 #define MAX_EVENTS 64
-#define MAX_CLIENTS 64
 
 volatile sig_atomic_t g_running = 1;
-
-typedef struct{
-    char buffer[1024];
-    size_t length;
-} ClientBuffer;
 
 void handle_signal(int sig){               //收到SIGINT或SIGTERM，g_running = 0
     (void) sig;
@@ -165,23 +160,6 @@ int process_client_data(ClientBuffer *client_buf, const char *data, size_t data_
     return 0;
 }
 
-int set_nonblocking(int fd)
-{
-    int flags;
-    flags = fcntl(fd, F_GETFL, 0);                  //拿到原来标志位
-    if(flags < 0){
-        perror("fcntl F_GETFL");
-        return -1;
-    }
-    if(fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0){  //设置为非阻塞模式
-        perror("fcntl F_SETFL");
-        return -1;
-    }
-
-    return 0;
-}
-
-
 int main(void)
 {
     signal(SIGINT, handle_signal);              //提前声明ctrl+c，执行handle_signal,不按默认方式结束
@@ -204,7 +182,6 @@ int main(void)
     int client_fd;
     int epfd;
                                                                                                          
-    struct sockaddr_in server_addr;
     struct sockaddr_in client_addr;
 
     ClientBuffer client_buf[MAX_CLIENTS];  //为每个客户端维护一个缓冲区
@@ -227,15 +204,10 @@ int main(void)
     control_args.device = &device;
     control_args.log_queue = &log_queue;
 
-    server_fd = socket(AF_INET, SOCK_STREAM, 0);
-
+    server_fd = network_create_server(PORT);         //创建server
     if(server_fd < 0){
-        perror("socket");
-        return 1;                                   //退出
-    }
-
-    if(set_nonblocking(server_fd) < 0){
-        return 1;                                   //退出
+        fprintf(stderr, "network server init failed\n");
+        return 1;
     }
 
     epfd =epoll_create1(0);                        //创建epoll实例
@@ -244,6 +216,19 @@ int main(void)
         close(server_fd);
         return 1;
     }
+    struct epoll_event ev;
+    ev.events = EPOLLIN | EPOLLET;                           //设置监听事件类型为可读
+    ev.data.fd = server_fd;                        //设置监听的文件描述符为server_fd
+
+    struct epoll_event events[MAX_EVENTS];          //用于存储就绪事件的数组
+
+    if( epoll_ctl(epfd, EPOLL_CTL_ADD, server_fd, &ev) < 0 ){         //将server_fd添加到epoll实例中
+        perror("epoll_ctl");
+        close(server_fd);
+        close(epfd);
+        return 1;
+    }
+
 
     pthread_t control_tid;
     if(pthread_create(&control_tid, NULL, control_thread, &control_args) != 0){
@@ -271,40 +256,6 @@ int main(void)
     //     fprintf(stderr, "%s\n", strerror(ret));
     //     return 1;
     // }
-
-    struct epoll_event ev;
-    ev.events = EPOLLIN | EPOLLET;                           //设置监听事件类型为可读
-    ev.data.fd = server_fd;                        //设置监听的文件描述符为server_fd
-
-    struct epoll_event events[MAX_EVENTS];          //用于存储就绪事件的数组
-
-    if( epoll_ctl(epfd, EPOLL_CTL_ADD, server_fd, &ev) < 0 ){         //将server_fd添加到epoll实例中
-        perror("epoll_ctl");
-        close(server_fd);
-        close(epfd);
-        return 1;
-    }
-
-    memset(&server_addr, 0, sizeof(server_addr));   //全部初始化为0
-    server_addr.sin_family = AF_INET;                //IPv4
-    server_addr.sin_addr.s_addr = INADDR_ANY;        //本地任意IP
-    server_addr.sin_port = htons(PORT);              //端口号
-
-    //告诉kernel这个server_fd的地址和端口
-    if(bind(server_fd, (struct sockaddr*)&server_addr, sizeof(server_addr) ) < 0){
-        perror("bind");
-        close(epfd);
-        close(server_fd);
-        return 1;
-    }
-
-    //将server_fd设置为监听状态，backlog为5
-    if(listen(server_fd, 5) < 0){
-        perror("listen");
-        close(epfd);
-        close(server_fd);
-        return 1;
-    }
 
     while(g_running){
         int n = epoll_wait(epfd, events, MAX_EVENTS, -1);
